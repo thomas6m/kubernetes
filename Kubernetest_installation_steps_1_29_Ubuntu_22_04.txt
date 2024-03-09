@@ -1,0 +1,146 @@
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+
+Ubuntu - 22.04
+Kubernetes - 1.29
+
+Kubernetest_installation_steps_1_29_Ubuntu_22_04
+
+sudo sed -i '/swap/ s/^\(.*\)$/#\1/g' /etc/fstab
+
+vi /etc/hosts
+10.0.0.100	workstation.example.com	workstation
+10.0.0.10	k8s-master.example.com	k8s-master
+10.0.0.20	k8s-worker1.example.com	k8s-worker1
+10.0.0.30	k8s-worker2.example.com	k8s-worker2
+10.0.0.40	k8s-worker3.example.com	k8s-worker3
+
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+
+########### reboot ######################
+
+
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+sudo modprobe overlay
+sudo modprobe br_netfilter
+sudo tee /etc/sysctl.d/kubernetes.conf<<EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+sysctl --system
+
+export OS=xUbuntu_22.04
+export CRIO_VERSION=1.28
+echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$CRIO_VERSION/$OS/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$CRIO_VERSION.list
+curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$CRIO_VERSION/$OS/Release.key | sudo apt-key add -
+curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | sudo apt-key add -
+sudo apt update -y
+sudo apt install cri-o cri-o-runc -y
+sudo systemctl enable crio.service
+sudo systemctl start crio.service
+sudo apt install cri-tools -y
+
+sudo kubeadm config images pull --cri-socket /var/run/crio/crio.sock --kubernetes-version v1.29.0
+sudo kubeadm init   --pod-network-cidr=10.244.0.0/16  --upload-certs --kubernetes-version=v1.29.0 --cri-socket /var/run/crio/crio.sock
+
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml
+
+wget https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml
+
+cp -p custom-resources.yaml custom-resources.yaml_bkp
+
+sed -i 's/cidr: 192\.168\.0\.0\/16/cidr: 10.244.0.0\/16/g' custom-resources.yaml
+
+diff custom-resources.yaml custom-resources.yaml_bkp
+
+kubectl create -f custom-resources.yaml
+
+####################################################
+Your Kubernetes control-plane has initialized successfully!
+
+To start using your cluster, you need to run the following as a regular user:
+
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively, if you are the root user, you can run:
+
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+
+You should now deploy a pod network to the cluster.
+Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
+  https://kubernetes.io/docs/concepts/cluster-administration/addons/
+
+Then you can join any number of worker nodes by running the following on each as root:
+
+
+kubeadm join 10.0.0.10:6443 --token 6tsg2h.vy0juu5w8elz0uj3 --discovery-token-ca-cert-hash sha256:f81762ba25cd4f4a137f0ef40f4571f7c12c6b226cc17fe427ea8b17ba92b9a9
+
+
+
+root@k8s-master:~#
+#################################################################################################################################
+
+kubectl label node k8s-worker1 node-role.kubernetes.io/worker=worker
+kubectl label node k8s-worker2 node-role.kubernetes.io/worker=worker
+kubectl label node k8s-worker3 node-role.kubernetes.io/worker=worker
+
+
+############################################  METALLB  #####################################################################################
+# see what changes would be made, returns nonzero returncode if different
+kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl diff -f - -n kube-system
+
+# actually apply the changes, returns nonzero returncode on errors only
+kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl apply -f - -n kube-system
+
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.3/config/manifests/metallb-native.yaml
+
+vi first-pool.yaml
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 10.0.0.150-10.0.0.250
+
+kubectl apply -f first-pool.yaml
+
+vi firstL2advertisement.yaml
+
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: example
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - first-pool
+
+
+kubectl apply -f firstL2advertisement.yaml
+###################################################################################################################################################
+Testing:
+###################################################################################################################################################
+kubectl create deploy nginx --image nginx
+watch kubectl get pod
+kubectl expose deploy nginx --port 80 --type LoadBalancer
+kubectl get svc
+###################################################################################################################################################
+
+
+
+
+
+
+
