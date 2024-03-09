@@ -3,8 +3,6 @@ https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-ku
 Ubuntu - 22.04
 Kubernetes - 1.29
 
-Kubernetest_installation_steps_1_29_Ubuntu_22_04
-
 sudo sed -i '/swap/ s/^\(.*\)$/#\1/g' /etc/fstab
 
 vi /etc/hosts
@@ -18,8 +16,6 @@ sudo apt-get update
 sudo apt-get install -y apt-transport-https ca-certificates curl gpg
 
 ########### reboot ######################
-
-
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
@@ -51,15 +47,10 @@ sudo kubeadm config images pull --cri-socket /var/run/crio/crio.sock --kubernete
 sudo kubeadm init   --pod-network-cidr=10.244.0.0/16  --upload-certs --kubernetes-version=v1.29.0 --cri-socket /var/run/crio/crio.sock
 
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml
-
 wget https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml
-
 cp -p custom-resources.yaml custom-resources.yaml_bkp
-
 sed -i 's/cidr: 192\.168\.0\.0\/16/cidr: 10.244.0.0\/16/g' custom-resources.yaml
-
 diff custom-resources.yaml custom-resources.yaml_bkp
-
 kubectl create -f custom-resources.yaml
 
 ####################################################
@@ -88,12 +79,9 @@ kubeadm join 10.0.0.10:6443 --token 6tsg2h.vy0juu5w8elz0uj3 --discovery-token-ca
 
 root@k8s-master:~#
 #################################################################################################################################
-
 kubectl label node k8s-worker1 node-role.kubernetes.io/worker=worker
 kubectl label node k8s-worker2 node-role.kubernetes.io/worker=worker
 kubectl label node k8s-worker3 node-role.kubernetes.io/worker=worker
-
-
 ############################################  METALLB  #####################################################################################
 # see what changes would be made, returns nonzero returncode if different
 kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl diff -f - -n kube-system
@@ -104,7 +92,6 @@ kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: f
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.3/config/manifests/metallb-native.yaml
 
 vi first-pool.yaml
-
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -117,7 +104,6 @@ spec:
 kubectl apply -f first-pool.yaml
 
 vi firstL2advertisement.yaml
-
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
@@ -126,7 +112,6 @@ metadata:
 spec:
   ipAddressPools:
   - first-pool
-
 
 kubectl apply -f firstL2advertisement.yaml
 ###################################################################################################################################################
@@ -137,10 +122,3 @@ watch kubectl get pod
 kubectl expose deploy nginx --port 80 --type LoadBalancer
 kubectl get svc
 ###################################################################################################################################################
-
-
-
-
-
-
-
