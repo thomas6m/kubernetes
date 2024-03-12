@@ -1,5 +1,14 @@
 https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
 
+Create .vimrc file in homedirectory
+Create a file in your home directory called .vimrc, and put your commands in there:
+vi .vimrc
+set tabstop=4
+set shiftwidth=4
+set expandtab
+
+
+
 Ubuntu - 22.04
 Kubernetes - 1.29
 
