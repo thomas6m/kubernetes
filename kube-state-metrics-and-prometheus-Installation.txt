@@ -1,3 +1,5 @@
+https://github.com/kubernetes/kube-state-metrics/tree/main/docs
+
 Kube-State-Metrics #### Installation......................
 https://medium.com/@seifeddinerajhi/monitoring-kubernetes-clusters-with-kube-state-metrics-2b9e73a67895
 https://www.densify.com/kubernetes-tools/kube-state-metrics/
