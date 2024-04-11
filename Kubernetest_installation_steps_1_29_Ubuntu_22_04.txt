@@ -87,7 +87,6 @@ kubeadm join 10.0.0.10:6443 --token 5ji2gb.xte6sjpuppgudk8w --discovery-token-ca
 root@k8s-master:~#
 --------------------------------------------------------------------------------
 
-
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml
 
 wget https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml
@@ -96,12 +95,8 @@ sed -i 's/cidr: 192\.168\.0\.0\/16/cidr: 10.244.0.0\/16/g' custom-resources.yaml
 diff custom-resources.yaml custom-resources.yaml_bkp
 kubectl create -f custom-resources.yaml
 
-
-root@k8s-master:~#
 #################################################################################################################################
-kubectl label node k8s-worker1 node-role.kubernetes.io/worker=worker
-kubectl label node k8s-worker2 node-role.kubernetes.io/worker=worker
-kubectl label node k8s-worker3 node-role.kubernetes.io/worker=worker
+kubectl label node k8s-worker node-role.kubernetes.io/worker=worker
 ############################################  METALLB  #####################################################################################
 # see what changes would be made, returns nonzero returncode if different
 kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl diff -f - -n kube-system
@@ -112,7 +107,7 @@ kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: f
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.3/config/manifests/metallb-native.yaml
 
 kubectl get pods -A -o wide
-
+-----------------------------------------------------
 vi first-pool.yaml
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
@@ -122,9 +117,9 @@ metadata:
 spec:
   addresses:
   - 10.0.0.150-10.0.0.250
-
+-----------------------------------------------------
 kubectl apply -f first-pool.yaml
-
+-----------------------------------------------------
 vi firstL2advertisement.yaml
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
@@ -134,7 +129,7 @@ metadata:
 spec:
   ipAddressPools:
   - first-pool
-
+------------------------------------------------
 kubectl apply -f firstL2advertisement.yaml
 ###################################################################################################################################################
 Testing:
