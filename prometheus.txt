@@ -25,7 +25,7 @@ kubectl get secret --namespace monitoring prometheus-grafana -o jsonpath="{.data
 
 
 ####################################################################
-helm uninstall prometheus
+helm uninstall prometheus -n monitoring
 kubectl delete crd alertmanagerconfigs.monitoring.coreos.com
 kubectl delete crd alertmanagers.monitoring.coreos.com
 kubectl delete crd podmonitors.monitoring.coreos.com
