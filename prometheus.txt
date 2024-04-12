@@ -13,6 +13,35 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 helm install prometheus prometheus-community/kube-prometheus-stack  --namespace monitoring
 helm show values prometheus-community/kube-prometheus-stack   > values.yaml
+
+
+[root@workstation ~]# kubectl get svc -A
+NAMESPACE          NAME                                                 TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                        AGE
+calico-apiserver   calico-api                                           ClusterIP      10.111.125.146   <none>        443/TCP                        37m
+calico-system      calico-kube-controllers-metrics                      ClusterIP      None             <none>        9094/TCP                       38m
+calico-system      calico-typha                                         ClusterIP      10.108.49.139    <none>        5473/TCP                       39m
+default            kubernetes                                           ClusterIP      10.96.0.1        <none>        443/TCP                        41m
+default            nginx                                                LoadBalancer   10.97.165.55     10.0.0.150    80:32650/TCP                   19m
+kube-system        kube-dns                                             ClusterIP      10.96.0.10       <none>        53/UDP,53/TCP,9153/TCP         41m
+kube-system        prometheus-kube-prometheus-coredns                   ClusterIP      None             <none>        9153/TCP                       8m15s
+kube-system        prometheus-kube-prometheus-kube-controller-manager   ClusterIP      None             <none>        10257/TCP                      8m15s
+kube-system        prometheus-kube-prometheus-kube-etcd                 ClusterIP      None             <none>        2381/TCP                       8m15s
+kube-system        prometheus-kube-prometheus-kube-proxy                ClusterIP      None             <none>        10249/TCP                      8m15s
+kube-system        prometheus-kube-prometheus-kube-scheduler            ClusterIP      None             <none>        10259/TCP                      8m15s
+kube-system        prometheus-kube-prometheus-kubelet                   ClusterIP      None             <none>        10250/TCP,10255/TCP,4194/TCP   7m54s
+metallb-system     webhook-service                                      ClusterIP      10.102.69.99     <none>        443/TCP                        20m
+monitoring         alertmanager-operated                                ClusterIP      None             <none>        9093/TCP,9094/TCP,9094/UDP     7m54s
+monitoring         prometheus-grafana                                   ClusterIP      10.103.198.164   <none>        80/TCP                         8m15s
+monitoring         prometheus-kube-prometheus-alertmanager              ClusterIP      10.101.147.168   <none>        9093/TCP,8080/TCP              8m15s
+monitoring         prometheus-kube-prometheus-operator                  ClusterIP      10.96.158.100    <none>        443/TCP                        8m15s
+monitoring         prometheus-kube-prometheus-prometheus                ClusterIP      10.109.213.101   <none>        9090/TCP,8080/TCP              8m15s
+monitoring         prometheus-kube-state-metrics                        ClusterIP      10.107.34.227    <none>        8080/TCP                       8m15s
+monitoring         prometheus-operated                                  ClusterIP      None             <none>        9090/TCP                       7m53s
+monitoring         prometheus-prometheus-node-exporter                  ClusterIP      10.102.185.31    <none>        9100/TCP                       8m15s
+[root@workstation ~]#
+
+
+
 #### Update the below details in values.yaml
 1. Check the current SVC details
 2. Takenote of the service port details
