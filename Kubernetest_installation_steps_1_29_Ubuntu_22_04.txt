@@ -31,7 +31,6 @@ ExecStart=/usr/local/bin/node_exporter
 WantedBy=multi-user.target
 EOF
 
-
 7. Reload systemd and Start Node Exporter:
 systemctl daemon-reload && systemctl start node_exporter
 
