@@ -1,0 +1,151 @@
+dnf -y install net-tools telnet curl wget traceroute nmap-ncat git  httpd-tools jq  nfs-utils
+systemctl stop firewalld && systemctl disable firewalld
+sed -i s/^SELINUX=.*$/SELINUX=disabled/ /etc/selinux/config && setenforce 0
+
+
+tee /etc/sysctl.d/70-ipv6.conf <<EOF
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+EOF
+
+
+sysctl --load /etc/sysctl.d/70-ipv6.conf
+dnf install -y epel-release && dnf update -y && reboot
+##################### NFS Server #########################################################
+dnf install -y nfs-utils
+mkdir -p /nfsshare
+chmod -R 777 /nfsshare
+chown -R nobody:nobody /nfsshare
+
+tee /etc/exports<<EOF
+/nfsshare 10.0.0.0/24(rw,sync,no_root_squash,no_all_squash,no_wdelay)
+EOF
+
+systemctl enable nfs-server rpcbind && systemctl start nfs-server rpcbind
+showmount -e localhost
+#################### NFS Client ######### Ubuntu #########################################
+apt install nfs-common && apt update
+##########################################################################################
+dnf -y install bind bind-utils
+cp -p /etc/named.conf /etc/named.conf-bkp
+##########################################################################################
+vi /etc/named.conf
+//
+// named.conf
+//
+// Provided by Red Hat bind package to configure the ISC BIND named(8) DNS
+// server as a caching only nameserver (as a localhost DNS resolver only).
+//
+// See /usr/share/doc/bind*/sample/ for example named configuration files.
+//
+
+options {
+        listen-on port 53 { 127.0.0.1; 10.0.0.10; };
+        listen-on-v6 port 53 { ::1; };
+        directory       "/var/named";
+        dump-file       "/var/named/data/cache_dump.db";
+        statistics-file "/var/named/data/named_stats.txt";
+        memstatistics-file "/var/named/data/named_mem_stats.txt";
+        secroots-file   "/var/named/data/named.secroots";
+        recursing-file  "/var/named/data/named.recursing";
+        allow-query     { localhost; 10.0.0.0/24; };
+
+        /*
+         - If you are building an AUTHORITATIVE DNS server, do NOT enable recursion.
+         - If you are building a RECURSIVE (caching) DNS server, you need to enable
+           recursion.
+         - If your recursive DNS server has a public IP address, you MUST enable access
+           control to limit queries to your legitimate users. Failing to do so will
+           cause your server to become part of large scale DNS amplification
+           attacks. Implementing BCP38 within your network would greatly
+           reduce such attack surface
+        */
+        recursion yes;
+forwarders {
+                8.8.8.8;
+                8.8.4.4;
+        };
+
+        dnssec-enable yes;
+        dnssec-validation yes;
+
+        managed-keys-directory "/var/named/dynamic";
+
+        pid-file "/run/named/named.pid";
+        session-keyfile "/run/named/session.key";
+
+        /* https://fedoraproject.org/wiki/Changes/CryptoPolicy */
+        include "/etc/crypto-policies/back-ends/bind.config";
+};
+
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+
+zone "." IN {
+        type hint;
+        file "named.ca";
+};
+
+include "/etc/named.rfc1912.zones";
+include "/etc/named.root.key";
+include "/etc/named/named.conf.local";
+};
+##########################################################################################
+vi /etc/named/named.conf.local
+zone "example.com" {
+    type master;
+    file "/etc/named/zones/db.example.com"; # zone file path
+};
+
+zone "0.0.10.in-addr.arpa" {
+    type master;
+    file "/etc/named/zones/db.10.0.0";  # 10.0.0.0/24 subnet
+##########################################################################################
+mkdir /etc/named/zones
+##########################################################################################
+vi /etc/named/zones/db.example.com
+$TTL    604800
+@       IN      SOA     infra-server.example.com. admin.example.com. (
+                  1     ; Serial
+             604800     ; Refresh
+              86400     ; Retry
+            2419200     ; Expire
+             604800     ; Negative Cache TTL
+)
+
+; name servers - NS records
+    IN      NS      infra-server
+
+; name servers - A records
+infra-server.example.com.         IN      A       10.0.0.10
+k8s-master.example.com.           IN      A       10.0.0.11
+k8s-worker1.example.com.          IN      A       10.0.0.12
+k8s-worker2.example.com.          IN      A       10.0.0.13
+k8s-worker3.example.com.          IN      A       10.0.0.14
+##########################################################################################
+vi /etc/named/zones/db.10.0.0
+$TTL    604800
+@       IN      SOA     infra-server.example.com. admin.example.com. (
+                  6     ; Serial
+             604800     ; Refresh
+              86400     ; Retry
+            2419200     ; Expire
+             604800     ; Negative Cache TTL
+)
+
+; name servers - NS records
+    IN      NS      infra-server.example.com.
+
+; name servers - PTR records
+10       IN    PTR    infra-server.example.com.
+11       IN    PTR    k8s-master.example.com.
+12       IN    PTR    k8s-worker1.example.com.
+13       IN    PTR    k8s-worker2.example.com.
+14       IN    PTR    k8s-worker3.example.com.
+##########################################################################################
+systemctl enable named && systemctl start named && systemctl status named
+##########################################################################################
