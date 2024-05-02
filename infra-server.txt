@@ -149,3 +149,16 @@ $TTL    604800
 ##########################################################################################
 systemctl enable named && systemctl start named && systemctl status named
 ##########################################################################################
+Install and Set Up kubectl
+# This overwrites any existing configuration in /etc/yum.repos.d/kubernetes.repo
+cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/repodata/repomd.xml.key
+EOF
+
+yum install -y kubectl
+##########################################################################################
