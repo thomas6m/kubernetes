@@ -1,0 +1,169 @@
+/https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+
+
+Create .vimrc file in homedirectory
+Create a file in your home directory called .vimrc, and put your commands in there:
+
+vi .vimrc
+set tabstop=4
+set shiftwidth=4
+set expandtab
+
+
+sed -i '/swap/ s/^\(.*\)$/#\1/g' /etc/fstab
+
+swapoff -a
+
+vi /etc/hosts
+10.0.0.254	infra.example.com	infra
+10.0.0.10	k8s-master.example.com	k8s-master
+10.0.0.11	k8s-worker1.example.com	k8s-worker1
+10.0.0.12	k8s-worker2.example.com	k8s-worker2
+10.0.0.13	k8s-worker3.example.com	k8s-worker3
+
+apt-get update -y
+apt-get install -y apt-transport-https ca-certificates curl gpg software-properties-common
+
+# If the directory `/etc/apt/keyrings` does not exist, it should be created before the curl command, read the note below.
+# sudo mkdir -p -m 755 /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+# This overwrites any existing configuration in /etc/apt/sources.list.d/kubernetes.list
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+sudo apt-get update -y
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+sudo systemctl enable --now kubelet
+------------------------------
+export KUBERNETES_VERSION=v1.31
+export CRIO_VERSION=v1.31
+
+
+curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/v1.31/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/stable:/v1.31/deb/ /" |  tee /etc/apt/sources.list.d/cri-o.list
+
+apt-get update -y
+apt-get install -y cri-o
+
+systemctl enable --now crio.service
+
+
+
+modprobe overlay
+modprobe br_netfilter
+
+tee /etc/sysctl.d/kubernetes.conf<<EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+sysctl --system
+
+kubeadm init --pod-network-cidr=192.168.0.0/16
+
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+kubectl get cm kubeadm-config -n kube-system -o yaml
+kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}'
+kubectl get crds
+kubectl get csv  -A
+
+
+
+##############################
+kubeadm join 10.0.0.10:6443 --token ihftjs.83yxbka825dl76e8 --discovery-token-ca-cert-hash sha256:d3ac7774ab24154d055bcfefa90d8e9d291b986a4efc845ea4e65b91770c707f
+
+https://docs.tigera.io/calico/latest/getting-started/kubernetes/quickstart
+
+#########################################################################
+#########################################################################
+kubectl label node k8s-worker1 node-role.kubernetes.io/worker=worker
+kubectl label node k8s-worker2 node-role.kubernetes.io/worker=worker
+kubectl label node k8s-worker3 node-role.kubernetes.io/worker=worker
+
+#########################################################################
+#########################################################################
+https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/onpremises
+
+Step1: Install the operator on your cluster.
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/manifests/tigera-operator.yaml
+
+Step2: Download the custom resources necessary to configure Calico.
+curl https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/manifests/custom-resources.yaml -O
+
+Step3: Create the manifest to install Calico.
+kubectl create -f custom-resources.yaml
+
+Step4: Verify Calico installation in your cluster
+
+watch kubectl get pods -n calico-system
+##########################################################################
+############################################  METALLB  ###################
+##########################################################################
+https://metallb.universe.tf/installation/
+
+
+# see what changes would be made, returns nonzero returncode if different
+kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl diff -f - -n kube-system
+
+# actually apply the changes, returns nonzero returncode on errors only
+kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl apply -f - -n kube-system
+
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.8/config/manifests/metallb-frr.yaml
+
+kubectl get pods -A -o wide
+-----------------------------------------------------
+vi first-pool.yaml
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 10.0.0.150-10.0.0.250
+-----------------------------------------------------
+kubectl apply -f first-pool.yaml
+-----------------------------------------------------
+vi firstL2advertisement.yaml
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: example
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - first-pool
+------------------------------------------------
+kubectl apply -f firstL2advertisement.yaml
+###################################################################################################################################################
+Testing:
+###################################################################################################################################################
+kubectl create deploy nginx --image nginx
+watch kubectl get pod
+kubectl expose deploy nginx --port 80 --type LoadBalancer
+kubectl get svc
+###################################################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
