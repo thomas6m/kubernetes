@@ -1,0 +1,168 @@
+sed -i '/swap/ s/^\(.*\)$/#\1/g' /etc/fstab
+
+swapoff -a
+
+vi /etc/hosts
+10.0.0.5	infra.example.com	infra
+10.0.0.10	k8s-master.example.com	k8s-master
+10.0.0.11	k8s-worker1.example.com	k8s-worker1
+10.0.0.12	k8s-worker2.example.com	k8s-worker2
+10.0.0.13	k8s-worker3.example.com	k8s-worker3
+
+
+dnf -y install net-tools telnet curl wget traceroute nmap-ncat git  httpd-tools jq  nfs-utils
+systemctl stop firewalld && systemctl disable firewalld
+sed -i s/^SELINUX=.*$/SELINUX=disabled/ /etc/selinux/config && setenforce 0
+
+
+tee /etc/sysctl.d/70-ipv6.conf <<EOF
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+EOF
+
+sysctl --load /etc/sysctl.d/70-ipv6.conf
+dnf install -y epel-release && dnf update -y && reboot
+
+# This overwrites any existing configuration in /etc/yum.repos.d/kubernetes.repo
+cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://pkgs.k8s.io/core:/stable:/v1.31/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://pkgs.k8s.io/core:/stable:/v1.31/rpm/repodata/repomd.xml.key
+exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+EOF
+
+
+yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+systemctl enable --now kubelet
+
+
+
+export KUBERNETES_VERSION=v1.31
+export CRIO_VERSION=v1.31
+
+
+cat <<EOF | tee /etc/yum.repos.d/cri-o.repo
+[cri-o]
+name=CRI-O
+baseurl=https://pkgs.k8s.io/addons:/cri-o:/stable:/$CRIO_VERSION/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://pkgs.k8s.io/addons:/cri-o:/stable:/$CRIO_VERSION/rpm/repodata/repomd.xml.key
+EOF
+
+dnf install -y container-selinux
+dnf install -y cri-o 
+
+systemctl enable --now crio.service
+
+modprobe overlay
+modprobe br_netfilter
+
+tee /etc/sysctl.d/kubernetes.conf<<EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+sysctl --system
+
+kubeadm config images pull
+kubeadm init --pod-network-cidr=192.168.0.0/16
+------------------------------------------------------------------------------------------------------------------
+kubeadm join 10.0.0.10:6443 --token kwph68.faqgcov1y1jitoaw --discovery-token-ca-cert-hash sha256:3b8a8812c45b0e11dcc9634e8e923969ba4570f4d19b1d0739f886308914ffb7
+
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively, if you are the root user, you can run:
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+kubectl label node k8s-worker1.example.com node-role.kubernetes.io/worker=worker
+kubectl label node k8s-worker2.example.com node-role.kubernetes.io/worker=worker
+kubectl label node k8s-worker3.example.com node-role.kubernetes.io/worker=worker
+####################################################################################################################
+####################################################################################################################
+####################################################################################################################
+#######################################		Install Calico		############################################
+https://docs.tigera.io/calico/latest/getting-started/kubernetes/quickstart
+
+
+Install the Tigera Calico operator and custom resource definitions.
+
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/manifests/custom-resources.yaml
+
+watch kubectl get pods -n calico-system
+kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+
+kubectl get nodes -o wide
+
+
+####################################################################################################################
+####################################################################################################################
+####################################################################################################################
+#######################################		METALLB  		############################################
+https://metallb.universe.tf/installation/
+
+# see what changes would be made, returns nonzero returncode if different
+kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl diff -f - -n kube-system
+
+# actually apply the changes, returns nonzero returncode on errors only
+kubectl get configmap kube-proxy -n kube-system -o yaml | sed -e "s/strictARP: false/strictARP: true/" | kubectl apply -f - -n kube-system
+
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.3/config/manifests/metallb-native.yaml
+
+kubectl get pods -A -o wide
+-----------------------------------------------------
+vi first-pool.yaml
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 10.0.0.150-10.0.0.250
+-----------------------------------------------------
+kubectl apply -f first-pool.yaml
+-----------------------------------------------------
+vi firstL2advertisement.yaml
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: example
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - first-pool
+------------------------------------------------
+kubectl apply -f firstL2advertisement.yaml
+####################################################################################################################
+####################################################################################################################
+################################	Testing:	            ################################################
+
+kubectl create deploy nginx --image nginx
+watch kubectl get pod
+kubectl expose deploy nginx --port 80 --type LoadBalancer
+kubectl get svc
+####################################################################################################################
+####################################################################################################################
+####################################################################################################################
+
+
+kubectl cluster-info
+
+yum install bash-completion
+source /usr/share/bash-completion/bash_completion
+
+echo 'source <(kubectl completion bash)' >>~/.bashrc
+echo 'alias k=kubectl' >>~/.bashrc
+echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
+source ~/.bashrc
+####################################################################################################################
+####################################################################################################################
+####################################################################################################################
